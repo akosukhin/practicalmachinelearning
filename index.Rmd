@@ -1,30 +1,90 @@
 ---
 title: "Practical Machine Learning Course Project"
 author: "Aleksandr Kosukhin"
-date: '7 июня 2016 г '
+date: 'June $10^{th}$, 2016'
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
 ```
 
-## R Markdown
+## Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This work is aimed to partially replicate the work of *Velloso et al* in solving a problem of qualitative activity recognition of weight lifting excercises. The quality of exercise activity was formalised by choosing $4$ frequent incorrect ways of doing unilateral dumbbell biceps curl and the $5^{th}$ correct way. With this formalisation the problem became a classification problem and could be solved with the means of machine learning.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+## Read Data
 
-```{r cars}
-summary(cars)
+The data for this work are the subset of original data available [here](http://groupware.les.inf.puc-rio.br/har)
+
+The data are readings of 4 on-body sensors: on arm, forearm, dumbbell and belt.
+
+```{r download, eval=FALSE}
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(trainUrl, "pml-training.csv")
+download.file(testUrl, "pml-testing.csv")
+```
+```{r readData}
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
 ```
 
-## Including Plots
+## Data Structure
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r data}
+dim(training)
+str(training[, 1:10])
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+It is seen that the data are time series and this should influence the cross validation procedure. Also the 'X' column is just an index and should not be included into the predictors set.
+
+```{r}
+chrono <- order(training[, 3], training[, 4])
+training <- training[chrono,]
+
+```
+
+
+## Feature Selection
+
+The data contain raw readings of sensors and derivatives from them. We just exclude near zero features.
+
+```{r, warning=FALSE}
+library(caret)
+nzv <- nearZeroVar(training[, -dim(training)[2]])
+length(nzv)
+```
+
+
+## Model Algorithm
+
+Because of the characteristic noise in the sensor data, a Random Forest approach was used.
+
+```{r control}
+fitControl <- trainControl(## Time series data
+                            method = "timeslice",
+                            initialWindow = 100,
+                            horizon = 25,
+                            fixedWindow = TRUE)
+```
+
+```{r train, warning=FALSE}
+set.seed(2704)
+modelFit <- train(classe ~ ., data = training[, -c(1, nzv)],
+                    method = "rf",
+                    ##trControl = fitControl,
+                    verbose = FALSE
+                  )
+```
+
+## Model result
+
+```{r echo=FALSE}
+print(modelFit)
+```
+
+
+```{r, echo=FALSE}
+plot(modelFit)
+```
